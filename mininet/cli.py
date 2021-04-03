@@ -29,6 +29,7 @@ from subprocess import call
 from cmd import Cmd
 from os import isatty
 from select import poll, POLLIN
+from time import sleep, localtime, strftime
 import sys
 import time
 import os
@@ -210,6 +211,39 @@ class CLI( Cmd ):
         "Ping between first two hosts, returns all ping results."
         self.mn.pingPairFull()
 
+    def do_pingdouble( self, line ):
+        "h1/h2 ping h3."
+        args = line.split()
+        hosts1 = []
+        hosts2 = []
+        now = strftime("%Y%m%dT%H%M%S", localtime())
+        for i in range(3):
+            if args[i] not in self.mn:
+                err = True
+                error( "node '%s' not in network\n" % args[i] )
+            else:
+                if i == 0:
+                    hosts1.append( self.mn[ args[i] ] )
+                elif i == 1:
+                    hosts2.append( self.mn[ args[i] ] )
+                else:
+                    hosts1.append( self.mn[ args[i] ] )
+                    hosts2.append( self.mn[ args[i] ] )
+        err = False
+        if len(args) == 3:
+            if not err:
+                self.mn.pingDouble(now, hosts1 )
+                self.mn.pingDouble(now, hosts2 )
+        elif len(args) == 4:
+            period = args[ 3 ]
+            err = False
+            if not err:
+                self.mn.pingDouble(now, hosts1, float(period))
+                self.mn.pingDouble(now, hosts2, float(period))
+        else:
+            error('invalid number of args: pingdouble node1 node2 node3 udpBw period\n' +
+                'examples: pingdouble h1 h2 h3 [60]\n')
+
     def do_iperf( self, line ):
         """Simple iperf TCP test between two (optionally specified) hosts.
            Usage: iperf node1 node2"""
@@ -229,6 +263,100 @@ class CLI( Cmd ):
                 self.mn.iperf( hosts )
         else:
             error( 'invalid number of args: iperf src dst\n' )
+
+    def do_iperfdouble( self, line ):
+        """Multi iperf UDP test between two specified nodes
+        $iperfdouble h1 h2 h3 50m 10"""
+        
+        args = line.split()
+        hosts1 = []
+        hosts2 = []
+        now = strftime("%Y%m%dT%H%M%S", localtime())
+        for i in range(3):
+            if args[i] not in self.mn:
+                err = True
+                error( "node '%s' not in network\n" % args[i] )
+            else:
+                if i == 0:
+                    hosts1.append( self.mn[ args[i] ] )
+                elif i == 1:
+                    hosts2.append( self.mn[ args[i] ] )
+                else:
+                    hosts1.append( self.mn[ args[i] ] )
+                    hosts2.append( self.mn[ args[i] ] )
+        err = False
+        if len(args) == 3:
+            if not err:
+                self.mn.iperf_single(now, hosts1 )
+                # sleep(1)
+                self.mn.iperf_single(now, hosts2 )
+        elif len(args) == 5:
+            udpBw = args[ 3 ]
+            period = args[ 4 ]
+            err = False
+            if not err:
+                self.mn.iperf_single(now, hosts1, udpBw, float(period))
+                # sleep(1)
+                self.mn.iperf_single(now, hosts2, udpBw, float(period))
+        else:
+            error('invalid number of args: iperfdouble node1 node2 node3 udpBw period\n' +
+                'examples: iperfdouble h1 h2 h3 [50M] [10]\n')
+
+    def do_iperfsingle( self, line ):
+        """Multi iperf UDP test between two specified nodes
+        $iperfsingle h1 h3 50m 10"""
+        
+        args = line.split()
+        hosts = []
+        err = False
+        for arg in args[:2]:
+            if arg not in self.mn:
+                err = True
+                error( "node '%s' not in network\n" % arg )
+            else:
+                hosts.append( self.mn[ arg ] )
+        if len(args) == 2:
+            if not err:
+                self.mn.iperf_single( hosts )
+        elif len(args) == 4:
+            udpBw = args[ 2 ]
+            period = args[ 3 ]
+            err = False
+            if not err:
+                self.mn.iperf_single( hosts, udpBw, float(period))
+        else:
+            error('invalid number of args: iperfsingle node1 node2 udpBw period\n' +
+                'examples: iperfsingle h1 h3 [50M] [10]\n')
+
+    def do_iperfmulti( self, line ):
+        """Multi iperf UDP test between nodes"""
+        args = line.split()
+        if len(args) == 1:
+            udpBw = args[ 0 ]
+            self.mn.iperfMulti(udpBw)
+        elif len(args) == 2:
+            udpBw = args[ 0 ]
+            period = args[ 1 ]
+            err = False
+            self.mn.iperfMulti(udpBw, float(period))
+        else:
+            error('invalid number of args: iperfmulti udpBw \n' +
+                'udpBw examples: 1M\n')
+
+    def do_iperfleafspine( self, line ):
+        """iperf UDP test between nodes in leaf-spine topo"""
+        args = line.split()
+        if len(args) == 1:
+            udpBw = args[ 0 ]
+            self.mn.iperfleafspine(udpBw)
+        elif len(args) == 2:
+            udpBw = args[ 0 ]
+            period = args[ 1 ]
+            err = False
+            self.mn.iperfleafspine(udpBw, float(period))
+        else:
+            error('invalid number of args: iperfleafspine udpBw \n' +
+                'udpBw examples: 1M\n')
 
     def do_iperfudp( self, line ):
         """Simple iperf UDP test between two (optionally specified) hosts.

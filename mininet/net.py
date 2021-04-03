@@ -715,6 +715,20 @@ class Mininet( object ):
         hosts = [ self.hosts[ 0 ], self.hosts[ 1 ] ]
         return self.pingFull( hosts=hosts )
 
+    def pingDouble( self, now, hosts=None, period=60):
+        "h1/h2 ping h3."
+        if not hosts:
+            return
+        else:
+            assert len(hosts) == 2
+        client, server = hosts
+        ping_output = 'h' + client.name[1:] + 'ping' + 'h' + server.name[1:] + '.' + now
+        output( '*** Ping: testing RTT between ' )
+        output( "%s and %s\n" % ( client.name, server.name ) )
+        print "***client ping server***"
+        client.cmd('ping -c' + str(period) + ' ' + server.IP() +
+                   ' ' + ' > /home/liaoss/network/log/' + ping_output + '&')
+
     @staticmethod
     def _parseIperf( iperfOutput ):
         """Parse iperf output and return bandwidth.
@@ -781,6 +795,71 @@ class Mininet( object ):
             result.insert( 0, udpBw )
         output( '*** Results: %s\n' % result )
         return result
+
+    def iperf_single( self, now, hosts=None, udpBw='10M', period=10, port=5001):
+        """Run iperf between two hosts using UDP.
+        hosts: list of hosts; if None, uses opposite hosts
+        returns: results two-element array of server and client speeds"""
+        if not hosts:
+            return
+        else:
+            assert len( hosts ) == 2
+        client, server = hosts
+        iperf_output = 'h' + client.name[1:] + 'iperf' + 'h' + server.name[1:] + '.' + now
+        ping_output = 'h' + client.name[1:] + 'ping' + 'h' + server.name[1:] + '.' + now
+        output( '*** Iperf: testing bandwidth between ' )
+        output( "%s and %s\n" % ( client.name, server.name ) )
+        iperfArgs = 'iperf -u -p ' + '500' + client.name[1:] + ' '
+        bwArgs = '-b ' + udpBw + ' '
+        print "***start server***"
+        server.cmd(iperfArgs + '-s -P 1 -i 1' +
+                   ' > /home/liaoss/network/log/' + iperf_output + '&')
+        print "***start client***"
+        client.cmd(iperfArgs + '-t '+ str(period) + ' -c ' + server.IP() + ' ' + bwArgs + '&')
+        print "***client ping server***"
+        client.cmd('ping -c' + str(period) + ' ' + server.IP() +
+                   ' ' + ' > /home/liaoss/network/log/' + ping_output + '&')
+
+    def iperfMulti(self, bw, period=5):
+        base_port = 5001
+        server_list = []
+        client_list = [h for h in self.hosts]
+        host_list = []
+        host_list = [h for h in self.hosts]
+
+        cli_outs = []
+        ser_outs = []
+
+        _len = len(host_list)
+        for i in xrange(0, _len):
+            client = host_list[i]
+            server = client
+            while( server == client ):
+                server = random.choice(host_list) 
+            server_list.append(server)
+            self.iperf_single(hosts = [client, server], udpBw=bw, period= period, port=base_port)
+            sleep(.05)
+            base_port += 1
+        self.hosts[0].cmd('ping -c10 ' + self.hosts[-1].IP() +
+                          ' > /home/liaoss/network/log/delay.out')
+        sleep(period)
+
+    # leaf-spine topo, 2 spine switch, 4 leaf switch, 16 host in total
+    # h1-h9, h2-h10 ...
+    def iperfleafspine(self, bw, period=10):
+        base_port = 5001
+        host_list = []
+        host_list = [h for h in self.hosts]
+
+        _len = len(host_list)
+        for i in [0, 1, 4, 5, 2, 3, 6, 7]:
+            client = host_list[i]
+            server = host_list[i+8]
+            self.iperf_single(hosts = [client, server], udpBw=bw, period=period, port=base_port)
+            sleep(0.5)
+            base_port += 1
+        self.hosts[0].cmd('ping -c10 '+ self.hosts[-1].IP() + ' > /home/liaoss/network/log/delay.out')
+        sleep(period)
 
     def runCpuLimitTest( self, cpu, duration=5 ):
         """run CPU limit test with 'while true' processes.
